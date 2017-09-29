@@ -1,0 +1,24 @@
+item = {
+  soi ~
+  excellent? ~
+  name? ~
+  (attribute ~ level)? ~
+  (attribute ~ option)? ~
+  (attribute ~ (skill | luck)){0,2} ~
+  eoi
+}
+
+excellent = { (^"x" | ^"excellent") }
+name = { alpha+ }
+level = { comparator? ~ digits }
+option = { comparator? ~ digits }
+skill = { ^"S" }
+luck = { ^"L" }
+
+comparator = { (">" | "<") ~ "="? }
+digits = @{ digit+ }
+
+digit = _{ '0'..'9' }
+alpha = _{ 'a'..'z' | 'A'..'Z' | "'" }
+attribute = _{ "+" }
+whitespace = _{ " " }

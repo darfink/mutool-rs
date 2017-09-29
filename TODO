@@ -1,0 +1,43 @@
+# Useful
+- Death screenshot (Pushbullet)
+- Instant pickup
+- Notify item pickup later stage?
+- Add character name notification?
+- Buff timer clear log out
+- Buff timer display right align?
+- Fix loot notifier if stacks
+- Fix message in beginning
+- Zen stats very much bugged
+
+# Nice
+- End stats session (killed/teleport)
+- Terminal debug?
+- DPS Meter?
+
+# VERIFY
+
+# Meta
+- GUI
+- Good injector
+
+# FIXED
+- Auto repair (bolts)
+- Buff timer fortitude & soul barrier
+- Stats zen earned
+- User stats XP bugged?
+- Buff timer
+- Fix configure buff timer threshold
+- AHP (variable check)
+- Your bag is full: <ITEM>
+- Generic config
+- HP POTS BUGGY?
+- EXP stats level-relative
+- Kiil counter
+- LOOT checking space
+- Order not by zen?
+- SOLO MODE LOOTED
+- References instead of pointers?
+- Stop item logging?
+- Refactor loot
+- Shift-click ignore filter
+- Windows XP

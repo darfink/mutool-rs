@@ -1,0 +1,86 @@
+[PushBullet]
+access_token = ""
+
+[LootFilter]
+# The filter is ignored whilst shift is pressed.
+enabled = true
+# A whitelist of item's that will be looted using <space>.
+items = [
+  "Excellent",
+  "+>2+>0+S",
+  "+>2+>0+L",
+  "Loch's feather",
+  "Crest of Monarch",
+  "Dark Horse Spirit",
+  "Dark Raven Spirit",
+  "Box of Luck",
+  "Jewel of Chaos",
+  "Jewel of Bless",
+  "Jewel of Soul",
+  "Jewel of Life",
+  "Jewel of Creation",
+  "Jewel of Guardian",
+  "Gemstone",
+  "Guardian Angel",
+  "Imp",
+  "Horn of Uniria",
+  "Scroll of Archangel",
+  "Blood Bone",
+  "Ring of Soulshift",
+  "Zen",
+  "Devil's Eye",
+  "Devil's Key",
+  "Sign of Lord",
+  "Symbol of Kundun",
+  "Scroll of the Emperor",
+  "Ring of Honor",
+  "Broken Sword",
+  "Dark Stone",
+  "Tear of Elf",
+  "Soul Shard of Wizard",
+]
+
+[LootNotifier]
+enabled = true
+delay = 2000
+items = [
+  "Excellent",
+  "+>2+>0+S",
+  "+>2+>0+L",
+  "Apple",
+  "Loch's Feather",
+  "Crest of Monarch",
+  "Ring of Soulshift",
+  "Jewel of Chaos",
+  "Jewel of Bless",
+  "Jewel of Soul",
+  "Jewel of Life",
+  "Jewel of Creation",
+  "Jewel of Guardian",
+  "Gemstone",
+  "Scroll of the Emperor",
+  "Ring of Honor",
+  "Broken Sword",
+  "Dark Stone",
+  "Tear of Elf",
+  "Soul Shard of Wizard",
+]
+
+[BuffTimer]
+enabled = true
+warn = 10
+
+[DeathNotifier]
+enabled = true
+screenshot = true
+
+[AutoHealthPotion]
+enabled = true
+threshold = 0.3
+
+[AutoRepair]
+enabled = true
+
+[UserStats]
+experience = true
+kills = true
