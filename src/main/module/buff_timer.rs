@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Deserializer};
 use num_traits::FromPrimitive;
 use muonline_packet::{Packet, PacketDecodable};
+use hsl::HSL;
 use mu;
 use ext::model;
 
@@ -54,7 +55,7 @@ impl super::Module for BuffTimer {
         // Insert the buff to the target's active list
         self.buffs.entry(target.id)
           .or_insert_with(HashMap::new)
-          .insert(skill, Buff::new(buff.name, duration));
+          .insert(skill, Buff::new(buff.color, duration));
       } else {
         // TODO: Remove buffs if replaced by other users
       }
@@ -87,6 +88,7 @@ impl super::Module for BuffTimer {
     const BUFF_WIDTH: f32 = 82.4;
     const BUFF_HEIGHT: f32 = 6.4;
     const NAME_HEIGHT: f32 = 8.0;
+    const NAME_MARGIN: i32 = 2;
 
     let mut position_y = POS_Y;
 
@@ -113,24 +115,30 @@ impl super::Module for BuffTimer {
       // Everything but the background is affected by the padding
       offset_y += PADDING;
 
+      // TODO: Move this somewhere good
+      let render_text: extern "C" fn() = ::std::mem::transmute(0x5DF301u32);
+      render_text();
+
       // Draw the user's name in a unique color
       renderer.draw_text(
         user.name(),
-        offset_x as i32,
+        offset_x as i32 + NAME_MARGIN,
         offset_y as i32,
         mu::Color::from_str(user.name()),
         mu::Color::TRANSPARENT);
+
+      // TODO: Move this somewhere good as well
+      let render_rectangles: extern "C" fn(bool) = ::std::mem::transmute(0x5DF380u32);
+      render_rectangles(true);
 
       // Update the offset for the adjacent buff
       offset_y += NAME_HEIGHT + PADDING;
 
       for (_, buff) in buffs {
-        let time_left = buff.time_left();
-        let time_left_percent = time_left / (buff.duration.as_secs() as f32);
-        let time_left_secs = time_left.round() as u64;
+        let mut hsl = HSL::from_rgb(&[buff.color.red, buff.color.green, buff.color.blue]);
 
-        let should_warn = time_left_secs < self.config.warn;
-        let alpha = if should_warn && time_left_secs % 2 == 0 { 0 } else { 1 };
+        hsl.l -= 0.20;
+        let (red, green, blue) = hsl.to_rgb();
 
         // Draw the buff border
         renderer.draw_rectangle(
@@ -138,10 +146,13 @@ impl super::Module for BuffTimer {
           offset_y,
           BUFF_WIDTH,
           BUFF_HEIGHT,
-          mu::Color::from_hex(0x006000).alpha(alpha * 0x7F));
+          mu::Color::new(red, green, blue).alpha(0x7F));
 
         let buff_width = BUFF_WIDTH - BUFF_PADDING * 2.0;
         let buff_height = BUFF_HEIGHT - BUFF_PADDING * 2.0;
+
+        hsl.l += 0.10;
+        let (red, green, blue) = hsl.to_rgb();
 
         // Draw the buff background
         renderer.draw_rectangle(
@@ -149,15 +160,26 @@ impl super::Module for BuffTimer {
           offset_y + BUFF_PADDING,
           buff_width,
           buff_height,
-          mu::Color::from_hex(0x008000).alpha(alpha * 0xB2));
+          mu::Color::new(red, green, blue).alpha(0xB2));
+
+        let time_left = buff.time_left();
+        let time_left_mod = (time_left.fract() * 10.0).round() as u64;
+        let should_warn = time_left < (self.config.warn as f32) && (time_left_mod % 3 == 0);
+
+        // In case the buff is running out, it flickers in white
+        let (buff_color, buff_width_modifier) = if !should_warn {
+          (buff.color, time_left / (buff.duration.as_secs() as f32))
+        } else {
+          (mu::Color::WHITE, 1.0)
+        };
 
         // Draw the buff timer
         renderer.draw_rectangle(
           offset_x + BUFF_PADDING,
           offset_y + BUFF_PADDING,
-          buff_width * time_left_percent,
+          buff_width * buff_width_modifier,
           buff_height,
-          mu::Color::from_hex(0x00C000).alpha(alpha * 0xFF));
+          buff_color);
 
         // Update the offset for the next buff
         offset_y += BUFF_HEIGHT + PADDING;
@@ -168,16 +190,15 @@ impl super::Module for BuffTimer {
 
 /// A representation of a buff event.
 struct Buff {
-  // TODO: Replace with color?
-  name: &'static str,
+  color: mu::Color,
   time: time::Instant,
   duration: time::Duration,
 }
 
 impl Buff {
   /// Creates a new buff with the current instant as start time.
-  pub fn new(name: &'static str, duration: time::Duration) -> Self {
-    Buff { name, duration, time: time::Instant::now() }
+  pub fn new(color: mu::Color, duration: time::Duration) -> Self {
+    Buff { color, duration, time: time::Instant::now() }
   }
 
   /// Returns the number of seconds left of the buff.
@@ -203,7 +224,7 @@ enum BuffDuration {
 
 /// A description of a buff.
 struct BuffMeta {
-  name: &'static str,
+  color: mu::Color,
   duration: BuffDuration,
 }
 
@@ -213,24 +234,24 @@ lazy_static! {
     let mut buffs = HashMap::new();
 
     buffs.insert(mu::Skill::Defense, BuffMeta {
-      name: "Defense",
+      color: mu::Color::from_hex(0x00C000),
       duration: BuffDuration::Static(time::Duration::from_secs(60)),
     });
 
     buffs.insert(mu::Skill::Attack, BuffMeta {
-      name: "Damage",
+      color: mu::Color::from_hex(0xB11713),
       duration: BuffDuration::Static(time::Duration::from_secs(60)),
     });
 
     buffs.insert(mu::Skill::KnightAddLife, BuffMeta {
-      name: "Greater Fortitude",
+      color: mu::Color::from_hex(0xC19A01),
       duration: BuffDuration::Dynamic(|character| {
         time::Duration::from_secs(60 + character.energy as u64 / 10)
       }),
     });
 
     buffs.insert(mu::Skill::Magicdefense, BuffMeta {
-      name: "Soul Barrier",
+      color: mu::Color::from_hex(0x0064C2),
       duration: BuffDuration::Dynamic(|character| {
         time::Duration::from_secs(60 + character.energy as u64 / 40)
       }),

@@ -45,8 +45,8 @@ impl Renderer {
       Err(_) => Cow::Owned(CString::new(text.as_ref()).expect("invalid render string")),
     };
 
-    self.set_text_color(color);
     self.set_text_background(background);
+    self.set_text_color(color);
     method(self, x, y, text.as_ptr(), 0, 0, 1, 0);
   }
 

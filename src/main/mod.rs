@@ -23,7 +23,7 @@ impl MuTool {
     let proto = Self::init_proto(ext::ref_protocol_core())?;
     let render = Self::init_render(ext::ref_state_world_render())?;
 
-    let pushbullet = notify::Pushbullet::new(config["Pushbullet"].clone())?;
+    let pushbullet = notify::Pushbullet::new(config["PushBullet"].clone())?;
     let service = Rc::new(pushbullet);
 
     let builders = module::init_modules(&config, service);

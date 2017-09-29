@@ -62,5 +62,7 @@ pub fn init_modules(config: &toml::Value, service: Rc<NotificationService>) -> V
       result
         .tap_err(|error| eprintln!("[Tool:Error] Failed to load module: {}", error))
         .ok()
-    }).collect()
+    })
+    .filter(|builder| builder.enabled())
+    .collect()
 }

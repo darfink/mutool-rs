@@ -40,7 +40,7 @@ impl UserStats  {
         let xp_of_level_per_hour = xp_of_level / hours_passed;
 
         ext::func::show_notice(
-          format!("Experience (total / % / %H): {} / {:.1}% / {:.1}%H",
+          format!("Experience (total / % / %h): {} / {:.1}% / {:.1}%h",
             stats.experience,
             xp_of_level * 100f32,
             xp_of_level_per_hour * 100f32));

@@ -23,6 +23,7 @@ extern crate strsim;
 extern crate knock;
 extern crate toml;
 extern crate tap;
+extern crate hsl;
 extern crate num_traits;
 
 #[cfg(windows)] extern crate kernel32;
