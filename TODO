@@ -3,27 +3,27 @@
 - Instant pickup
 - Notify item pickup later stage?
 - Add character name notification?
-- Buff timer clear log out
 - Fix loot notifier if stacks
 - Implement message in beginning
 - Zen stats very much bugged
-- Use potion/damage font for buff timer
 - Config get Option<> instead index
 - Bok of Kundun
 
 # Nice
 - End stats session (killed/teleport)
-- Terminal debug?
 - DPS Meter?
 
 # VERIFY
-- Flimmer (white) buff
 
 # Meta
 - GUI
 - Good injector
 
 # FIXED
+- Buff timer clear log out
+- Log to file
+- Terminal debug?
+- Flimmer (white) buff
 - Buff timer display right align?
 - Auto repair (bolts)
 - Buff timer fortitude & soul barrier
