@@ -164,7 +164,7 @@ impl super::Module for BuffTimer {
 
         let time_left = buff.time_left();
         let time_left_mod = (time_left.fract() * 10.0).round() as u64;
-        let should_warn = time_left < (self.config.warn as f32) && (time_left_mod % 3 == 0);
+        let should_warn = time_left < (self.config.warn as f32) && (time_left_mod % 5 == 0);
 
         // In case the buff is running out, it flickers in white
         let (buff_color, buff_width_modifier) = if !should_warn {
