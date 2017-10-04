@@ -3,6 +3,7 @@ use std::rc::Rc;
 use serde::{Deserialize, Deserializer};
 use muonline_packet::{Packet, PacketDecodable};
 use main::notify::NotificationService;
+use tap::TapOptionOps;
 use mu;
 use ext::{self, model};
 
@@ -28,15 +29,14 @@ impl super::Module for DeathNotifier {
 
   /// Analyzes a packet to detect if the player dies.
   unsafe fn process(&mut self, packet: &Packet) {
-    if let Ok(event) = mu::protocol::realm::PlayerDeath::from_packet(packet) {
-      let victim = model::Entity::from_id(event.victim_id)
-        .expect("retrieving victim entity");
-
-      if victim.id == ext::ref_character_entity().id {
+    if let Ok(event) = mu::protocol::realm::EntityDeath::from_packet(packet) {
+      if event.victim_id == ext::ref_character_entity().id {
         let attacker = model::Entity::from_id(event.attacker_id)
-          .expect("retrieving attacker entity");
+          .tap_none(|| eprintln!("[DeathNotifier:Error] Invalid attacker entity"))
+          .map(|attacker| attacker.name())
+          .unwrap_or("<unknown>");
 
-        let message = format!("Attacker: {}", attacker.name());
+        let message = format!("Attacker: {}", attacker);
         let title = "Mu Online [Killed]".to_owned();
 
         if self.config.screenshot {
@@ -86,7 +86,7 @@ impl super::ModuleBuilder for Builder {
   unsafe fn build(self: Box<Self>) -> io::Result<Box<super::Module>> {
     let service = self.service.clone();
     let module = Box::new(DeathNotifier::new(self.config, service));
-    
+
     Ok(module as Box<_>)
   }
 }

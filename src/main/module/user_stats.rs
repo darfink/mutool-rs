@@ -1,69 +1,112 @@
 use std::{time, io, mem};
+use std::collections::HashSet;
 use serde::{Deserialize, Deserializer};
 use muonline_packet::{Packet, PacketDecodable};
 use detour::{StaticDetour, Detour};
+use tap::{TapBooleanOps, TapOptionOps};
 use {mu, ext};
 
 /// The module's name.
 pub const MODULE: &'static str = "UserStats";
 
-#[derive(Debug, Default)]
-struct Session {
-  experience: u32,
-  kills: u32,
-  money: u32,
-}
-
 /// An implementation of user stats.
 struct UserStats {
-  session: Option<(time::Instant, Session)>,
   config: Config,
+  session: Option<Session>,
+  killed: HashSet<u16>,
 }
 
 impl UserStats  {
   /// Creates a new user stats module.
   unsafe fn new(config: Config) -> Self {
-    UserStats { config, session: None }
+    UserStats {
+      config,
+      session: None,
+      killed: HashSet::new(),
+    }
   }
 
-  /// Ends the current session, printing out all stats.
-  unsafe fn end_session(&mut self) {
-    if let Some((start_time, stats)) = self.session.take() {
-      let hours_passed = (start_time.elapsed().as_secs() as f32) / 3600f32;
-
-      if self.config.experience && stats.experience > 0 {
-        let character = ext::model::Character::get();
-        let xp_base = Self::xp_for_level(character.level - 1);
-        let xp_for_level = character.experience_next - xp_base;
-
-        let xp_of_level = (stats.experience as f32) / (xp_for_level as f32);
-        let xp_of_level_per_hour = xp_of_level / hours_passed;
-
-        ext::func::show_notice(
-          format!("Experience (total / % / %h): {} / {:.1}% / {:.1}%h",
-            stats.experience,
-            xp_of_level * 100f32,
-            xp_of_level_per_hour * 100f32));
-      }
-
-      if self.config.kills && stats.kills > 0 {
-        let kills_per_hour = ((stats.kills as f32) / hours_passed).round();
-        ext::func::show_notice(
-          format!("Kills (total / per hour): {} / {}", stats.kills, kills_per_hour as u32));
-      }
-
-      if self.config.money && stats.money > 0 {
-        let zen_per_hour = ((stats.money as f32) / hours_passed).round();
-        ext::func::show_notice(
-          format!("Money (total / per hour): {} / {}", stats.money, zen_per_hour as u32));
-      }
+  /// Reports the session and ends it.
+  unsafe fn report_and_end(&mut self) {
+    if self.session.is_some() {
+      self.report();
+      self.session = None;
     }
+  }
+
+  /// Reports the current session's statistics.
+  unsafe fn report(&self) {
+    let session = try_opt!(self.session.as_ref()
+      .tap_none(|| ext::func::show_notice("No session is currently active")));
+    let seconds_passed = session.elapsed().as_secs() as f64;
+    let hours_passed = seconds_passed / 3600f64;
+
+    if self.config.experience && session.experience > 0 {
+      let xp_of_level = Self::xp_level_percentage(session.start_level, session.experience);
+      let xp_of_level_per_hour = xp_of_level / hours_passed;
+
+      ext::func::show_notice(
+        format!("Experience (total / % / %h): {} / {:.1}% / {:.1}%h",
+          session.experience,
+          xp_of_level * 100f64,
+          xp_of_level_per_hour * 100f64));
+    }
+
+    if self.config.kills && session.kills > 0 {
+      let kills_per_hour = ((session.kills as f64) / hours_passed).round();
+      ext::func::show_notice(
+        format!("Kills (total / per hour): {} / {}", session.kills, kills_per_hour as u32));
+    }
+
+    if self.config.damage && session.damage > 0 {
+      let damage_per_second = (session.damage as f64) / seconds_passed;
+      ext::func::show_notice(
+        format!("Damage (total / DPS): {} / {:.1}", session.damage, damage_per_second));
+    }
+
+    if self.config.money && session.money > 0 {
+      let zen_per_hour = ((session.money as f64) / hours_passed).round();
+      ext::func::show_notice(
+        format!("Money (total / per hour): {} / {}", session.money, zen_per_hour as u64));
+    }
+  }
+
+  /// Returns the amount of XP percentage received relative to each level.
+  fn xp_level_percentage(mut xp_base: u64, mut xp_gained: u64) -> f32 {
+    let mut xp_percentage = 0f32;
+    let mut level = Self::xp_to_level(xp_base);
+
+    while xp_gained > 0 {
+      // Calculate the total amount XP required for the level
+      let xp_level_total = Self::xp_for_level(level);
+
+      // Calculate the XP difference between this level and the previous
+      let xp_level_diff = xp_level_total - Self::xp_for_level(level - 1);
+
+      // Determine how much of the XP was gained during this level
+      let xp_on_level = xp_gained.min(xp_level_total - xp_base);
+
+      xp_percentage += (xp_on_level as f32) / (xp_level_diff as f32);
+      xp_gained -= xp_on_level;
+      xp_base = xp_level_total;
+      level += 1;
+    }
+
+    xp_percentage
+  }
+
+  /// Returns the level from a amount of XP.
+  fn xp_to_level(xp: u64) -> u16 {
+    let mut level = 1;
+    while xp >= Self::xp_for_level(level) {
+      level++;
+    }
+    level
   }
 
   /// Returns the amount of XP required for a level up.
   fn xp_for_level(level: u16) -> u32 {
-    let level = level as u32;
-    if level == 0 { return 0; }
+    let level = level as u64;
     let mut experience = 10 * level.pow(2) * (level + 9);
 
     if level > 255 {
@@ -80,20 +123,85 @@ impl super::Module for UserStats {
 
   /// Analyzes a packet to track items of interest.
   unsafe fn process(&mut self, packet: &Packet) {
-    if let Ok(event) = mu::protocol::realm::PlayerExperienceExt::from_packet(packet) {
-      let &mut (_, ref mut session) = self.session
-        .get_or_insert_with(|| (time::Instant::now(), Session::default()));
+    if let Ok(event) = mu::protocol::realm::EntityDeath::from_packet(packet) {
+      if event.attacker_id == ext::ref_character_entity().id {
+        self.killed.insert(event.victim_id);
+      } else {
+        self.killed.remove(&event.victim_id);
+      }
+    } else if let Ok(event) = mu::protocol::realm::PlayerExperienceExt::from_packet(packet) {
+      let session = self.session.get_or_insert_with(|| {
+        Session::new(ext::model::Character::get().experience as u64)
+      });
 
-      session.experience += event.experience();
+      session.end_time = time::Instant::now();
+      session.experience += event.experience() as u64;
       session.kills += 1;
+
+      let victim_id = event.victim_id & 0x7FFF;
+      if self.killed.remove(&victim_id) {
+        println!("[DpsMeter] Damage (KILL): {}", event.damage);
+        session.damage += event.damage as u64;
+      }
+
+      return;
     }
 
-    /*if let Ok(result) = mu::protocol::realm::ItemGetResult::from_packet(packet) {
-      if let mu::protocol::realm::ItemGetResult::Money(money) = result {
-        println!("[UserStats] Received {}", money);
-        session.money += money;
+    let session = try_opt!(self.session.as_mut());
+
+    if let Ok(attack) = mu::protocol::realm::PlayerDamageExt::from_packet(packet) {
+      if attack.victim_id != ext::ref_character_entity().id {
+        println!("[DpsMeter] Damage (HIT): {}", attack.damage);
+        session.damage += attack.damage as u64;
       }
-    }*/
+    } else if let Ok(event) = mu::protocol::realm::ItemGetResult::from_packet(packet) {
+      if let mu::protocol::realm::ItemGetResult::Money(money) = event {
+        let item = ext::ref_loot_table()[*ext::ref_item_loot_index() as usize];
+        if item.is_active && item.is_zen() {
+          session.money += item.modifier as u64;
+        }
+      }
+    }
+  }
+
+  /// Checks if the user want's the stats to be reported.
+  unsafe fn chat(&mut self, text: &str) -> bool {
+    (text == "/stats").tap_true(|_| self.report())
+  }
+}
+
+#[derive(Debug)]
+struct Session {
+  start_time: time::Instant,
+  end_time: time::Instant,
+  start_xp: u16,
+  experience: u64,
+  damage: u64,
+  kills: u64,
+  money: u64,
+}
+
+impl Session {
+  fn new(experience: u64) -> Self {
+    Session {
+      start_time: time::Instant::now(),
+      end_time: time::Instant::now(),
+      start_xp: experience,
+      experience: 0,
+      damage: 0,
+      kills: 0,
+      money: 0,
+    }
+  }
+
+  fn elapsed(&self) -> time::Duration {
+    let duration = self.end_time.duration_since(self.start_time);
+
+    if duration.as_secs() < 3 {
+      time::Duration::from_secs(3)
+    } else {
+      duration
+    }
   }
 }
 
@@ -101,6 +209,8 @@ impl super::Module for UserStats {
 struct Config {
   #[serde(default)]
   pub experience: bool,
+  #[serde(default)]
+  pub damage: bool,
   #[serde(default)]
   pub kills: bool,
   #[serde(default)]
@@ -135,7 +245,7 @@ impl Builder {
         .get()
         .expect("retrieving detour controller")
         .call(world);
-      (*stats.0).end_session();
+      (*stats.0).report_and_end();
     })
     .and_then(|mut hook| hook.enable().map(|_| hook))
     .map_err(|error| io::Error::new(io::ErrorKind::Other, error.to_string()))

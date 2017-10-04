@@ -1,9 +1,9 @@
 use std::{io, mem};
 use std::cmp::Ordering;
-use tap::TapBooleanOps;
+use tap::{TapBooleanOps, TapOptionOps};
 use serde::{Deserialize, Deserializer};
 use detour::{Detour, StaticDetour};
-use muonline_packet::{Packet, PacketDecodable};
+use muonline_packet::{Packet, PacketDecodable, PacketEncodable};
 use ext::{self, model};
 
 /// The module's name.
@@ -38,8 +38,27 @@ impl LootFilter {
       .next();
 
     if let Some(item) = entry {
-      ext::func::pickup_item(item);
+      self.pickup_item(item);
     }
+  }
+
+  /// Sends an item pickup request to the server.
+  pub unsafe fn pickup_item(&self, item: &model::ItemEntity) {
+    // Abort if there is a pending network request
+    if *ext::ref_item_loot_request() != u32::max_value() {
+      return;
+    }
+
+    let index = try_opt!(ext::ref_loot_table().iter()
+      .position(|other| ::std::ptr::eq(other, item))
+      .tap_none(|| eprintln!("[LootFilter:Error] Failed to retrieve item index")));
+
+    *ext::ref_item_loot_request() = index as u32;
+    *ext::ref_item_loot_index() = index as u32;
+
+    ::mu::protocol::client::ItemGetRequest::new(index as u16).to_packet()
+      .and_then(|packet| ext::func::send_packet(&packet, true))
+      .expect("sending item request packet");
   }
 
   /// Fiters out item's that are not of interest.

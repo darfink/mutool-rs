@@ -1,25 +1,21 @@
 # Useful
+- Bok of Kundun
+- End stats session (killed/teleport)
+
+# VERIFY
+- Implement chat commands (e.g /stats)
+- Zen stats implementation
+- DPS Meter?
+
+# STALE
 - Death screenshot (Pushbullet)
 - Instant pickup
 - Notify item pickup later stage?
-- Add character name notification?
 - Fix loot notifier if stacks
 - Implement message in beginning
-- Zen stats very much bugged
-- Config get Option<> instead index
-- Bok of Kundun
-
-# Nice
-- End stats session (killed/teleport)
-- DPS Meter?
-
-# VERIFY
-
-# Meta
-- GUI
-- Good injector
 
 # FIXED
+- Config get Option<> instead index
 - Buff timer clear log out
 - Log to file
 - Terminal debug?

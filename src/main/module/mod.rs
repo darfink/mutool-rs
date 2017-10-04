@@ -2,7 +2,7 @@ use std::io;
 use std::rc::Rc;
 use muonline_packet::Packet;
 use main::notify::NotificationService;
-use tap::TapResultOps;
+use tap::{TapResultOps, TapOptionOps};
 use {toml, ext};
 
 mod auto_health_potion;
@@ -25,6 +25,9 @@ pub trait Module {
 
   /// Renders any module elements.
   unsafe fn render(&mut self, _: &ext::model::Renderer) { }
+
+  /// Processes any chat command
+  unsafe fn chat(&mut self, _: &str) -> bool { false }
 }
 
 pub trait ModuleBuilder {
@@ -38,31 +41,47 @@ pub trait ModuleBuilder {
   unsafe fn build(self: Box<Self>) -> io::Result<Box<Module>>;
 }
 
-pub fn init_modules(config: &toml::Value, service: Rc<NotificationService>) -> Vec<Box<ModuleBuilder>> {
-  let results = vec![
-    auto_health_potion::Builder::new(config[auto_health_potion::MODULE].clone())
-      .map(|builder| Box::new(builder) as Box<ModuleBuilder>),
-    auto_repair::Builder::new(config[auto_repair::MODULE].clone())
-      .map(|builder| Box::new(builder) as Box<ModuleBuilder>),
-    buff_timer::Builder::new(config[buff_timer::MODULE].clone())
-      .map(|builder| Box::new(builder) as Box<ModuleBuilder>),
-    death_notifier::Builder::new(config[death_notifier::MODULE].clone(), service.clone())
-      .map(|builder| Box::new(builder) as Box<ModuleBuilder>),
-    loot_filter::Builder::new(config[loot_filter::MODULE].clone())
-      .map(|builder| Box::new(builder) as Box<ModuleBuilder>),
-    loot_notifier::Builder::new(config[loot_notifier::MODULE].clone(), service.clone())
-      .map(|builder| Box::new(builder) as Box<ModuleBuilder>),
-    user_stats::Builder::new(config[user_stats::MODULE].clone())
-      .map(|builder| Box::new(builder) as Box<ModuleBuilder>),
+pub fn load_modules(config: &toml::Value, service: Rc<NotificationService>) -> Vec<Box<ModuleBuilder>> {
+  let service2 = service.clone();
+  let entries: Vec<(&'static str, Box<Fn(toml::Value) -> io::Result<Box<ModuleBuilder>>>)> = vec![
+    (auto_health_potion::MODULE, Box::new(|config| {
+      auto_health_potion::Builder::new(config)
+        .map(|builder| Box::new(builder) as Box<ModuleBuilder>)
+    })),
+    (auto_repair::MODULE, Box::new(|config| {
+      auto_repair::Builder::new(config)
+        .map(|builder| Box::new(builder) as Box<ModuleBuilder>)
+    })),
+    (buff_timer::MODULE, Box::new(|config| {
+      buff_timer::Builder::new(config)
+        .map(|builder| Box::new(builder) as Box<ModuleBuilder>)
+    })),
+    (death_notifier::MODULE, Box::new(move |config| {
+      death_notifier::Builder::new(config, service.clone())
+        .map(|builder| Box::new(builder) as Box<ModuleBuilder>)
+    })),
+    (loot_filter::MODULE, Box::new(|config| {
+      loot_filter::Builder::new(config)
+        .map(|builder| Box::new(builder) as Box<ModuleBuilder>)
+    })),
+    (loot_notifier::MODULE, Box::new(move |config| {
+      loot_notifier::Builder::new(config, service2.clone())
+        .map(|builder| Box::new(builder) as Box<ModuleBuilder>)
+    })),
+    (user_stats::MODULE, Box::new(|config| {
+      user_stats::Builder::new(config)
+        .map(|builder| Box::new(builder) as Box<ModuleBuilder>)
+    })),
   ];
 
-  results.into_iter()
-    .filter_map(|result| {
-      // TODO: Add module name to error handling
-      result
-        .tap_err(|error| eprintln!("[Tool:Error] Failed to load module: {}", error))
-        .ok()
+  entries.into_iter()
+    .filter_map(|(name, constructor)| {
+      config.get(name)
+        .tap_none(|| eprintln!("[Tool:Warning] Missing module config for {}", name))
+        .and_then(|config| constructor(config.clone())
+          .tap_err(|error| eprintln!("[Tool:Error] Failed to load module {}: {}", name, error))
+          .ok())
     })
     .filter(|builder| builder.enabled())
-    .collect()
+    .collect::<Vec<_>>()
 }

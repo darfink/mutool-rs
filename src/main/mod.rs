@@ -1,6 +1,7 @@
 use std::{io, slice};
 use std::path::Path;
 use std::rc::Rc;
+use std::os::raw::c_char;
 use detour::{Detour, StaticDetour};
 use muonline_packet::{Packet, PacketType};
 use tap::TapResultOps;
@@ -14,6 +15,8 @@ pub struct MuTool {
   proto: StaticDetour<ext::ProtocolCore>,
   #[allow(dead_code)]
   render: StaticDetour<ext::StateWorldRender>,
+  #[allow(dead_code)]
+  chat: StaticDetour<ext::ChatHandler>,
   modules: Vec<Box<module::Module>>,
 }
 
@@ -22,11 +25,15 @@ impl MuTool {
     let config = Self::load_config("mutool.toml")?;
     let proto = Self::init_proto(ext::ref_protocol_core())?;
     let render = Self::init_render(ext::ref_state_world_render())?;
+    let chat = Self::init_chat(ext::ref_chat_handler())?;
 
-    let pushbullet = notify::Pushbullet::new(config["PushBullet"].clone())?;
+    let pb_config = config.get("PushBullet")
+      .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "missing 'PushBullet' config entry"))?
+      .clone();
+    let pushbullet = notify::Pushbullet::new(pb_config)?;
     let service = Rc::new(pushbullet);
 
-    let builders = module::init_modules(&config, service);
+    let builders = module::load_modules(&config, service);
     let modules = builders.into_iter()
       .filter_map(|builder| {
         let name = builder.name();
@@ -41,7 +48,7 @@ impl MuTool {
       println!("[Tool] - {}", module.name());
     }
 
-    Ok(MuTool { proto, render, modules })
+    Ok(MuTool { proto, render, chat, modules })
   }
 
   unsafe fn process(&mut self, packet: &Packet) {
@@ -56,6 +63,10 @@ impl MuTool {
       module.update();
       module.render(&renderer);
     }
+  }
+
+  unsafe fn chat(&mut self, text: &str) -> bool {
+    self.modules.iter_mut().any(|module| module.chat(text))
   }
 
   unsafe fn load_config<P: AsRef<Path>>(path: P) -> io::Result<toml::Value> {
@@ -111,9 +122,34 @@ impl MuTool {
       .and_then(|mut hook| hook.enable().map(|_| hook))
       .map_err(|error| io::Error::new(io::ErrorKind::Other, error.to_string()))
   }
+
+  unsafe fn init_chat(target: ext::ChatHandler)
+      -> io::Result<StaticDetour<ext::ChatHandler>> {
+    let detour = |text, item| {
+      match TOOL.as_mut() {
+        Some(tool) => {
+          let text = ::std::ffi::CStr::from_ptr(text).to_string_lossy();
+          if tool.chat(&text) {
+            return true;
+          }
+        },
+        None => eprintln!("[Tool:Error] No active instance"),
+      }
+
+      DetourChatHandler
+        .get()
+        .expect("calling original chat handler")
+        .call(text, item)
+    };
+
+    DetourChatHandler.initialize(target, detour)
+      .and_then(|mut hook| hook.enable().map(|_| hook))
+      .map_err(|error| io::Error::new(io::ErrorKind::Other, error.to_string()))
+  }
 }
 
 static_detours! {
   struct DetourProtocolCore: extern "C" fn(u32, *mut u8, u32, bool) -> bool;
   struct DetourStateWorldRender: extern "C" fn();
+  struct DetourChatHandler: extern "C" fn(*const c_char, bool) -> bool;
 }

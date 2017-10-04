@@ -47,7 +47,7 @@ items = [
   "Excellent",
   "+>2+>0+S",
   "+>2+>0+L",
-  "Apple",
+  "Remedy of Love",
   "Loch's Feather",
   "Crest of Monarch",
   "Ring of Soulshift",
@@ -83,4 +83,6 @@ enabled = true
 
 [UserStats]
 experience = true
+damage = true
 kills = true
+money = true

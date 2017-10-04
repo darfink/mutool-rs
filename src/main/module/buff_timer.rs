@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Deserializer};
 use num_traits::FromPrimitive;
 use muonline_packet::{Packet, PacketDecodable};
+use tap::TapOptionOps;
 use hsl::HSL;
 use mu;
 use ext::model;
@@ -33,8 +34,10 @@ impl super::Module for BuffTimer {
       let skill = try_opt!(mu::Skill::from_u16(event.skill));
       let buff = try_opt!(BUFFS.get(&skill));
 
-      let source = model::Entity::from_id(event.source_id).expect("retrieving source entity");
-      let target = model::Entity::from_id(event.target_id & 0x7FFF).expect("retrieving target entity");
+      let source = try_opt!(model::Entity::from_id(event.source_id)
+        .tap_none(|| eprintln!("[BuffTimer:Error] Failed to retrieve source entity")));
+      let target = try_opt!(model::Entity::from_id(event.target_id & 0x7FFF)
+        .tap_none(|| eprintln!("[BuffTimer:Error] Failed to retrieve target entity")));
 
       let character_id = model::Entity::character().id;
       let character_is_source = source.id == character_id;

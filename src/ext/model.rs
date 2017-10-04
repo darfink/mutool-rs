@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 use std::mem;
-use std::ffi::CStr;
 use std::fmt::Write;
 use std::os::raw::c_char;
 use mu;
@@ -34,20 +33,12 @@ impl Renderer {
   }
 
   pub unsafe fn draw_text<S: AsRef<[u8]>>(&self, text: S, x: i32, y: i32, color: mu::Color, background: mu::Color) {
-    use std::ffi::{CStr, CString};
-    use std::borrow::Cow;
-
     type DrawText = extern "thiscall" fn(*const Renderer, i32, i32, *const c_char, i32, i32, i32, i32);
     let method: DrawText = mem::transmute(0x41D9F1u32);
 
-    let text = match CStr::from_bytes_with_nul(text.as_ref()) {
-      Ok(data) => Cow::Borrowed(data),
-      Err(_) => Cow::Owned(CString::new(text.as_ref()).expect("invalid render string")),
-    };
-
     self.set_text_background(background);
     self.set_text_color(color);
-    method(self, x, y, text.as_ptr(), 0, 0, 1, 0);
+    method(self, x, y, ::util::to_cstr(text.as_ref()).as_ptr(), 0, 0, 1, 0);
   }
 
   unsafe fn set_text_background(&self, color: mu::Color) {
@@ -166,7 +157,7 @@ impl Entity {
 
   pub fn name(&self) -> &str {
     unsafe {
-      CStr::from_ptr(self.name.as_ptr())
+      ::std::ffi::CStr::from_ptr(self.name.as_ptr())
         .to_str()
         .expect("retrieving entity name")
     }

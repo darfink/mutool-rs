@@ -63,7 +63,6 @@ impl super::Module for AutoHealthPotion {
       if victim_is_player && health_is_below_threshold {
         self.use_health_potion();
       }
-
     }
   }
 }

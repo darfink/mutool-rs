@@ -5,6 +5,7 @@ pub mod model;
 pub mod func;
 
 pub type GetGobj = extern "C" fn() -> *mut model::Gobj;
+pub type ChatHandler = extern "C" fn(*const c_char, bool) -> bool;
 pub type GetRenderer = extern "C" fn() -> *mut model::Renderer;
 pub type DrawRectangle = extern "C" fn(f32, f32, f32, f32);
 pub type UpdateItemDurabilityStatus = extern "system" fn(*mut model::Item);
@@ -19,6 +20,7 @@ pub type PrintScreen = extern "C" fn();
 
 pub unsafe fn ref_get_gobj() -> GetGobj { mem::transmute(0x750101u32) }
 pub unsafe fn ref_get_renderer() -> GetRenderer { mem::transmute(0x41D732u32) }
+pub unsafe fn ref_chat_handler() -> ChatHandler { mem::transmute(0x52CDA0u32) }
 pub unsafe fn ref_draw_rectangle() -> DrawRectangle { mem::transmute(0x5E093Cu32) }
 pub unsafe fn ref_update_item_durability_status() -> UpdateItemDurabilityStatus { mem::transmute(0x712A6Du32) }
 pub unsafe fn ref_receive_notice() -> ReceiveNotice { mem::transmute(0x603490u32) }

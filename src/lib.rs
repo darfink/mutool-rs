@@ -92,10 +92,12 @@ pub unsafe extern "system" fn DllMain(
 }
 
 #[cfg(windows)]
-pub unsafe fn setup_stdio(log_path: &str) -> std::io::Result<winapi::HANDLE> {
+pub unsafe fn setup_stdio<P: AsRef<::std::path::Path>>(log_path: P) -> std::io::Result<winapi::HANDLE> {
   use std::io;
+  use std::time::{SystemTime, UNIX_EPOCH};
+  use std::os::windows::ffi::OsStrExt;
   use boolinator::Boolinator;
-  use winapi::{STD_OUTPUT_HANDLE, STD_ERROR_HANDLE, INVALID_HANDLE_VALUE};
+  use winapi::{STD_OUTPUT_HANDLE, STD_ERROR_HANDLE, INVALID_HANDLE_VALUE, ERROR_SHARING_VIOLATION};
 
   let stdout = kernel32::GetStdHandle(STD_OUTPUT_HANDLE);
   let stderr = kernel32::GetStdHandle(STD_ERROR_HANDLE);
@@ -105,17 +107,34 @@ pub unsafe fn setup_stdio(log_path: &str) -> std::io::Result<winapi::HANDLE> {
   (stderr != INVALID_HANDLE_VALUE)
     .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "could not retrieve standard error"))?;
 
-  let mut name = log_path.encode_utf16().collect::<Vec<_>>();
-  name.push(0);
+  let create_file = |name: &::std::path::Path| {
+    let mut name = name.as_os_str().encode_wide().collect::<Vec<_>>();
+    name.push(0);
 
-  let output = kernel32::CreateFileW(
-    name.as_ptr() as *const _,
-    winapi::FILE_GENERIC_WRITE,
-    0,
-    ::std::ptr::null_mut(),
-    winapi::OPEN_ALWAYS,
-    winapi::FILE_ATTRIBUTE_NORMAL,
-    ::std::ptr::null_mut());
+    kernel32::CreateFileW(
+      name.as_ptr() as *const _,
+      winapi::FILE_GENERIC_WRITE,
+      0,
+      ::std::ptr::null_mut(),
+      winapi::OPEN_ALWAYS,
+      winapi::FILE_ATTRIBUTE_NORMAL,
+      ::std::ptr::null_mut())
+  };
+
+  let log_path = log_path.as_ref();
+  let mut output = create_file(log_path);
+
+  if output == INVALID_HANDLE_VALUE && kernel32::GetLastError() == ERROR_SHARING_VIOLATION {
+    let stem = log_path.file_stem()
+      .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "invalid log file name"))?;
+
+    let time = SystemTime::now().duration_since(UNIX_EPOCH).expect("time went backwards");
+    let name = format!("{:?}-{}.log", stem, time.as_secs());
+
+    let mut log_path = log_path.to_path_buf();
+    log_path.set_file_name(&name);
+    output = create_file(&log_path);
+  }
 
   (output != INVALID_HANDLE_VALUE)
     .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "could not create log file"))?;
@@ -126,17 +145,13 @@ pub unsafe fn setup_stdio(log_path: &str) -> std::io::Result<winapi::HANDLE> {
 
   (kernel32::SetStdHandle(STD_OUTPUT_HANDLE, output) != 0)
     .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "could not redirect standard output"))?;
+  // This does not work in GUI applications since Windows 7
   //(!kernel32::GetStdHandle(STD_OUTPUT_HANDLE).is_null())
   //  .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "standard output was null"))?;
   (kernel32::SetStdHandle(STD_ERROR_HANDLE, output) != 0)
     .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "could not redirect standard error"))?;
   (!kernel32::GetStdHandle(STD_ERROR_HANDLE).is_null())
     .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "standard error was null"))?;
-
-  if offset > 0 {
-    // Append a new line between each run
-    println!("");
-  }
 
   //let fd = libc::open_osfhandle(output as _, libc::O_WRONLY | libc::O_TEXT);
   //libc::dup2(fd, 1);
