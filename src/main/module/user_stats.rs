@@ -42,7 +42,7 @@ impl UserStats  {
     let hours_passed = seconds_passed / 3600f64;
 
     if self.config.experience && session.experience > 0 {
-      let xp_of_level = Self::xp_level_percentage(session.start_level, session.experience);
+      let xp_of_level = Self::xp_level_percentage(session.start_xp, session.experience);
       let xp_of_level_per_hour = xp_of_level / hours_passed;
 
       ext::func::show_notice(
@@ -72,8 +72,8 @@ impl UserStats  {
   }
 
   /// Returns the amount of XP percentage received relative to each level.
-  fn xp_level_percentage(mut xp_base: u64, mut xp_gained: u64) -> f32 {
-    let mut xp_percentage = 0f32;
+  fn xp_level_percentage(mut xp_base: u64, mut xp_gained: u64) -> f64 {
+    let mut xp_percentage = 0f64;
     let mut level = Self::xp_to_level(xp_base);
 
     while xp_gained > 0 {
@@ -86,7 +86,7 @@ impl UserStats  {
       // Determine how much of the XP was gained during this level
       let xp_on_level = xp_gained.min(xp_level_total - xp_base);
 
-      xp_percentage += (xp_on_level as f32) / (xp_level_diff as f32);
+      xp_percentage += (xp_on_level as f64) / (xp_level_diff as f64);
       xp_gained -= xp_on_level;
       xp_base = xp_level_total;
       level += 1;
@@ -99,13 +99,13 @@ impl UserStats  {
   fn xp_to_level(xp: u64) -> u16 {
     let mut level = 1;
     while xp >= Self::xp_for_level(level) {
-      level++;
+      level += 1;
     }
     level
   }
 
   /// Returns the amount of XP required for a level up.
-  fn xp_for_level(level: u16) -> u32 {
+  fn xp_for_level(level: u16) -> u64 {
     let level = level as u64;
     let mut experience = 10 * level.pow(2) * (level + 9);
 
@@ -155,10 +155,10 @@ impl super::Module for UserStats {
         session.damage += attack.damage as u64;
       }
     } else if let Ok(event) = mu::protocol::realm::ItemGetResult::from_packet(packet) {
-      if let mu::protocol::realm::ItemGetResult::Money(money) = event {
-        let item = ext::ref_loot_table()[*ext::ref_item_loot_index() as usize];
-        if item.is_active && item.is_zen() {
-          session.money += item.modifier as u64;
+      if let mu::protocol::realm::ItemGetResult::Money(_) = event {
+        let item = &ext::ref_loot_table()[*ext::ref_item_loot_index() as usize];
+        if item.is_active && item.info.is_zen() {
+          session.money += item.info.modifier as u64;
         }
       }
     }
@@ -174,7 +174,7 @@ impl super::Module for UserStats {
 struct Session {
   start_time: time::Instant,
   end_time: time::Instant,
-  start_xp: u16,
+  start_xp: u64,
   experience: u64,
   damage: u64,
   kills: u64,

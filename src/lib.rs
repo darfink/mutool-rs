@@ -1,6 +1,7 @@
 #![recursion_limit="128"]
 #![feature(
     const_fn,
+    ord_max_min,
     drop_types_in_const,
     conservative_impl_trait,
     abi_thiscall,
