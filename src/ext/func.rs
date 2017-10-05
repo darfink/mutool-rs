@@ -9,8 +9,8 @@ pub unsafe fn get_item_name(code: mu::ItemCode, level: u8) -> String {
 
   // Item names may contain invalid unicode
   CStr::from_ptr(buffer.as_ptr())
-  	.to_string_lossy()
-  	.into()
+    .to_string_lossy()
+    .into()
 }
 
 pub unsafe fn show_notice<S: Into<String>>(message: S) {
@@ -24,7 +24,7 @@ pub unsafe fn show_notice<S: Into<String>>(message: S) {
 pub unsafe fn send_packet(packet: &Packet, encrypted: bool) -> io::Result<()> {
   let data = packet.to_bytes_ex(Some(&muonline_packet::XOR_CIPHER), None);
   match super::ref_send_packet()(data.as_ptr(), data.len(), encrypted as u32, 0) {
-  	false => Err(io::Error::new(io::ErrorKind::Other, "Failed to send packet")),
-  	true => Ok(())
+    false => Err(io::Error::new(io::ErrorKind::Other, "Failed to send packet")),
+    true => Ok(())
   }
 }
