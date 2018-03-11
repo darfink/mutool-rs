@@ -8,7 +8,7 @@ stopped playing before it became relevant.
 
 ## Features
 
-Many of these are used as complement to standard botting.
+Many of these are used as a complement to standard botting.
 
 - Auto Health Potion
 - Auto Repair
@@ -22,7 +22,7 @@ Many of these are used as complement to standard botting.
 ### Implementation
 
 The tool analyzes incoming packets by detouring `ProtoCore`, the main packet
-handler. GUI rendering is done by using the game's implementation. All
+handler. GUI rendering is done by exploiting the game's implementation. All
 information regarding the client was obtained by reverse engineering the Mu
 Online client using IDA Pro, extracting protocol packets and functons of
 interest.
